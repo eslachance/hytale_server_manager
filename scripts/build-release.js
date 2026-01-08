@@ -184,6 +184,12 @@ async function createPackageBase(packageDir) {
     path.join(packageDir, 'prisma', 'schema.prisma')
   );
 
+  // Copy .env.example
+  await fs.copy(
+    path.join(serverDir, '.env.example'),
+    path.join(packageDir, '.env.example')
+  );
+
   // Copy package.json (without devDependencies)
   const serverPkg = await fs.readJson(path.join(serverDir, 'package.json'));
   delete serverPkg.devDependencies;
@@ -275,20 +281,54 @@ echo Generating secrets if needed...
 node -e "const fs=require('fs');const crypto=require('crypto');let env=fs.readFileSync('.env','utf8');let changed=false;if(/^JWT_SECRET=$/m.test(env)){env=env.replace(/^JWT_SECRET=$/m,'JWT_SECRET='+crypto.randomBytes(64).toString('hex'));changed=true;}if(/^JWT_REFRESH_SECRET=$/m.test(env)){env=env.replace(/^JWT_REFRESH_SECRET=$/m,'JWT_REFRESH_SECRET='+crypto.randomBytes(64).toString('hex'));changed=true;}if(/^SETTINGS_ENCRYPTION_KEY=$/m.test(env)){env=env.replace(/^SETTINGS_ENCRYPTION_KEY=$/m,'SETTINGS_ENCRYPTION_KEY='+crypto.randomBytes(16).toString('hex'));changed=true;}if(changed){fs.writeFileSync('.env',env);console.log('Generated missing secrets in .env');}else{console.log('Secrets already configured.');}"
 
 echo.
+echo Creating data directories...
+if not exist "data" mkdir data
+if not exist "data\\db" mkdir data\\db
+if not exist "data\\logs" mkdir data\\logs
+if not exist "data\\servers" mkdir data\\servers
+if not exist "data\\backups" mkdir data\\backups
+echo Data directories ready.
+
+echo.
 echo Setting up database...
-echo Running Prisma generate...
-node node_modules\\prisma\\build\\index.js generate
-if errorlevel 1 (
-    echo ERROR: Prisma generate failed
+echo.
+echo Checking Prisma schema...
+if not exist "prisma\\schema.prisma" (
+    echo ERROR: prisma\\schema.prisma not found!
     pause
     exit /b 1
 )
-echo Running database migrations...
-node node_modules\\prisma\\build\\index.js migrate deploy
+echo Found prisma\\schema.prisma
+
+echo.
+echo Running Prisma generate...
+node node_modules\\prisma\\build\\index.js generate --schema=prisma\\schema.prisma
 if errorlevel 1 (
-    echo WARNING: Migrations failed, trying db push...
-    node node_modules\\prisma\\build\\index.js db push --accept-data-loss
+    echo ERROR: Prisma generate failed!
+    pause
+    exit /b 1
 )
+echo Prisma client generated.
+
+echo.
+echo Running database setup...
+node node_modules\\prisma\\build\\index.js db push --accept-data-loss --schema=prisma\\schema.prisma
+if errorlevel 1 (
+    echo ERROR: Database setup failed!
+    pause
+    exit /b 1
+)
+
+echo.
+echo Verifying database was created...
+if exist "data\\hytalepanel.db" (
+    echo Database file created: data\\hytalepanel.db
+) else (
+    echo WARNING: Database file not found at data\\hytalepanel.db
+    echo Checking alternative locations...
+    dir /s /b *.db 2>nul
+)
+echo Database setup complete.
 echo.
 echo ======================================
 echo   Setup complete!

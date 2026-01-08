@@ -24,3 +24,4 @@ dist-ssr
 *.sw?
 .env
 .claude
+releases/hytale-server-manager-1.0.0-windows.zip
