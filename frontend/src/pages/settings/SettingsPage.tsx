@@ -355,7 +355,7 @@ export const SettingsPage = () => {
                             Get an API key from
                           </p>
                           <a
-                            href="https://console.curseforge.com"
+                            href="https://support.curseforge.com/en/support/solutions/articles/9000208346-about-the-curseforge-api-and-how-to-apply-for-a-key"
                             target="_blank"
                             rel="noopener noreferrer"
                             className="text-xs text-accent-primary hover:underline flex items-center gap-1"
@@ -449,7 +449,7 @@ export const SettingsPage = () => {
               <div className="relative">
                 <Input
                   type={showNewPassword ? 'text' : 'password'}
-                  placeholder="Enter new password (min. 8 characters)"
+                  placeholder="Enter new password (min. 12 characters)"
                   value={passwordForm.newPassword}
                   onChange={(e) => setPasswordForm(prev => ({ ...prev, newPassword: e.target.value }))}
                 />
