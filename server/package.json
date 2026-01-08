@@ -1,6 +1,6 @@
 {
   "name": "hytale-server-manager-backend",
-  "version": "1.0.0",
+  "version": "0.2.12",
   "description": "Backend API for Hytale Server Manager",
   "main": "dist/index.js",
   "scripts": {

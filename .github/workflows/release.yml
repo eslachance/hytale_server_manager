@@ -34,6 +34,24 @@ jobs:
             echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
           fi
 
+      - name: Update version in source files
+        run: |
+          VERSION=${{ steps.version.outputs.VERSION }}
+          echo "Setting version to $VERSION"
+
+          # Update server/src/config.ts
+          sed -i "s/export const VERSION = '[^']*'/export const VERSION = '$VERSION'/" server/src/config.ts
+
+          # Update server/package.json
+          sed -i "s/\"version\": \"[^\"]*\"/\"version\": \"$VERSION\"/" server/package.json
+
+          # Update frontend/package.json
+          sed -i "s/\"version\": \"[^\"]*\"/\"version\": \"$VERSION\"/" frontend/package.json
+
+          echo "Updated versions:"
+          grep "VERSION = " server/src/config.ts
+          grep '"version"' server/package.json | head -1
+
       - name: Install frontend dependencies
         run: npm ci
         working-directory: frontend

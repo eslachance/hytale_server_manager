@@ -6,8 +6,8 @@ import fs from 'fs-extra';
 dotenv.config({ path: path.join(__dirname, '..', '.env') });
 
 // Version info - update this on each release
-export const VERSION = '1.0.0';
-export const VERSION_NAME = 'Initial Release';
+export const VERSION = '0.2.12';
+export const VERSION_NAME = 'Beta';
 
 /**
  * Configuration interface

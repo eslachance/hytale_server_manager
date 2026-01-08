@@ -1,6 +1,6 @@
 {
   "name": "hytale_server_manager",
-  "version": "1.0.0",
+  "version": "0.2.12",
   "description": "A web-based management dashboard for Hytale game servers. Built with React, TypeScript, and Node.js.",
   "main": "index.js",
   "scripts": {
