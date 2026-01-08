@@ -21,6 +21,8 @@ interface ServerData {
   backupType: string;
   backupExclusions: string | null;
   jvmArgs: string | null;
+  adapterConfig: string | null;
+  adapterType: string;
 }
 
 interface GeneralSettings {
@@ -43,6 +45,8 @@ interface StorageSettings {
 
 interface AdvancedSettings {
   jvmArgs: string;
+  jarFile: string;
+  javaPath: string;
 }
 
 interface FtpStatus {
@@ -90,6 +94,8 @@ export const ServerSettingsPage = () => {
   // Advanced settings state
   const [advancedSettings, setAdvancedSettings] = useState<AdvancedSettings>({
     jvmArgs: '-Xms1G -Xmx2G',
+    jarFile: 'server.jar',
+    javaPath: 'java',
   });
 
   // Load server data
@@ -138,9 +144,21 @@ export const ServerSettingsPage = () => {
         backupExclusions: exclusions,
       });
 
+      // Parse adapter config
+      let adapterConfig: { jarFile?: string; javaPath?: string } = {};
+      if (serverData.adapterConfig) {
+        try {
+          adapterConfig = JSON.parse(serverData.adapterConfig);
+        } catch (e) {
+          console.error('Failed to parse adapter config:', e);
+        }
+      }
+
       // Populate advanced settings
       setAdvancedSettings({
         jvmArgs: serverData.jvmArgs || '-Xms1G -Xmx2G',
+        jarFile: adapterConfig.jarFile || 'server.jar',
+        javaPath: adapterConfig.javaPath || 'java',
       });
     } catch (err: any) {
       console.error('Failed to load server:', err);
@@ -257,6 +275,10 @@ export const ServerSettingsPage = () => {
       } else if (activeTab === 'advanced') {
         updateData = {
           jvmArgs: advancedSettings.jvmArgs,
+          adapterConfig: {
+            jarFile: advancedSettings.jarFile,
+            javaPath: advancedSettings.javaPath,
+          },
         };
       }
 
@@ -308,8 +330,20 @@ export const ServerSettingsPage = () => {
       backupExclusions: exclusions,
     });
 
+    // Parse adapter config for reset
+    let adapterConfig: { jarFile?: string; javaPath?: string } = {};
+    if (server.adapterConfig) {
+      try {
+        adapterConfig = JSON.parse(server.adapterConfig);
+      } catch (e) {
+        console.error('Failed to parse adapter config:', e);
+      }
+    }
+
     setAdvancedSettings({
       jvmArgs: server.jvmArgs || '-Xms1G -Xmx2G',
+      jarFile: adapterConfig.jarFile || 'server.jar',
+      javaPath: adapterConfig.javaPath || 'java',
     });
 
     setHasChanges(false);
@@ -650,10 +684,45 @@ export const ServerSettingsPage = () => {
         <Card variant="glass">
           <CardHeader>
             <CardTitle>Advanced Settings</CardTitle>
-            <CardDescription>JVM arguments and advanced server configuration</CardDescription>
+            <CardDescription>Java configuration and JVM arguments</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-6">
+              {/* Java Executable Path */}
+              <div>
+                <label className="block text-sm text-text-light-muted dark:text-text-muted mb-2">Java Executable Path</label>
+                <Input
+                  value={advancedSettings.javaPath}
+                  onChange={(e) => {
+                    setAdvancedSettings(prev => ({ ...prev, javaPath: e.target.value }));
+                    setHasChanges(true);
+                  }}
+                  placeholder="java"
+                  className="font-mono"
+                />
+                <p className="text-xs text-text-light-muted dark:text-text-muted mt-1">
+                  Path to the Java executable. Use "java" to use system Java, or specify a full path (e.g., /usr/lib/jvm/java-17/bin/java).
+                </p>
+              </div>
+
+              {/* JAR File Name */}
+              <div>
+                <label className="block text-sm text-text-light-muted dark:text-text-muted mb-2">JAR File Name</label>
+                <Input
+                  value={advancedSettings.jarFile}
+                  onChange={(e) => {
+                    setAdvancedSettings(prev => ({ ...prev, jarFile: e.target.value }));
+                    setHasChanges(true);
+                  }}
+                  placeholder="server.jar"
+                  className="font-mono"
+                />
+                <p className="text-xs text-text-light-muted dark:text-text-muted mt-1">
+                  The name of the server JAR file in the server directory. Change this if you renamed or updated the JAR file.
+                </p>
+              </div>
+
+              {/* JVM Arguments */}
               <div>
                 <label className="block text-sm text-text-light-muted dark:text-text-muted mb-2">JVM Arguments</label>
                 <textarea

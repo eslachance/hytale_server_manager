@@ -319,6 +319,11 @@ class ApiService {
     backupType: 'local' | 'ftp';
     backupExclusions: string[] | null;
     jvmArgs: string;
+    adapterConfig: {
+      jarFile?: string;
+      javaPath?: string;
+      [key: string]: unknown;
+    };
   }>): Promise<T> {
     return this.request<T>(`/api/servers/${id}`, {
       method: 'PATCH',

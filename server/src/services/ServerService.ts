@@ -183,6 +183,7 @@ export class ServerService {
       backupType?: 'local' | 'ftp';
       backupExclusions?: string[] | null;
       jvmArgs?: string;
+      adapterConfig?: Record<string, unknown>;
     }
   ): Promise<PrismaServer> {
     // Build update data, only including fields that are provided
@@ -203,6 +204,27 @@ export class ServerService {
         : null;
     }
     if (data.jvmArgs !== undefined) updateData.jvmArgs = data.jvmArgs;
+
+    // Handle adapterConfig - merge with existing config
+    if (data.adapterConfig !== undefined) {
+      const existingServer = await this.prisma.server.findUnique({
+        where: { id: serverId },
+        select: { adapterConfig: true },
+      });
+
+      let existingConfig: Record<string, unknown> = {};
+      if (existingServer?.adapterConfig) {
+        try {
+          existingConfig = JSON.parse(existingServer.adapterConfig);
+        } catch {
+          existingConfig = {};
+        }
+      }
+
+      // Merge new config with existing
+      const mergedConfig = { ...existingConfig, ...data.adapterConfig };
+      updateData.adapterConfig = JSON.stringify(mergedConfig);
+    }
 
     const server = await this.prisma.server.update({
       where: { id: serverId },
