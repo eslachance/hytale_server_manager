@@ -234,8 +234,79 @@ pause
   await fs.writeFile(
     path.join(packageDir, 'install.bat'),
     `@echo off
-echo Running installation script...
-PowerShell -ExecutionPolicy Bypass -File "%~dp0scripts\\install.ps1" -InstallPath "%~dp0"
+:: Hytale Server Manager - Windows Installer
+:: This script requires Administrator privileges for Node.js installation
+
+cd /d "%~dp0"
+echo.
+echo ======================================
+echo   Hytale Server Manager - Setup
+echo ======================================
+echo.
+
+:: Check for Node.js
+echo Checking for Node.js...
+where node >nul 2>&1
+if %errorLevel% neq 0 (
+    echo Node.js not found. Installing...
+
+    :: Check for admin rights
+    net session >nul 2>&1
+    if %errorLevel% neq 0 (
+        echo Administrator privileges required to install Node.js.
+        echo Requesting elevation...
+        PowerShell -Command "Start-Process -FilePath '%~f0' -Verb RunAs"
+        exit /b
+    )
+
+    echo Downloading Node.js v20...
+    PowerShell -Command "Invoke-WebRequest -Uri 'https://nodejs.org/dist/v20.18.1/node-v20.18.1-x64.msi' -OutFile '%TEMP%\\node-installer.msi'"
+
+    echo Installing Node.js v20...
+    msiexec /i "%TEMP%\\node-installer.msi" /qn
+
+    :: Refresh PATH
+    set "PATH=%ProgramFiles%\\nodejs;%PATH%"
+
+    :: Cleanup
+    del "%TEMP%\\node-installer.msi" 2>nul
+
+    echo Node.js installed successfully.
+    echo.
+)
+
+:: Verify Node.js
+node --version >nul 2>&1
+if %errorLevel% neq 0 (
+    echo ERROR: Node.js installation failed or not in PATH.
+    echo Please install Node.js manually from https://nodejs.org/
+    echo Then run this script again.
+    pause
+    exit /b 1
+)
+
+for /f "tokens=*" %%i in ('node --version') do echo Node.js version: %%i
+echo.
+
+echo Checking environment configuration...
+if not exist ".env" (
+    echo Creating .env from template...
+    copy .env.example .env >nul
+)
+
+echo Generating secrets if needed...
+node -e "const fs=require('fs');const crypto=require('crypto');let env=fs.readFileSync('.env','utf8');let changed=false;if(/^JWT_SECRET=$/m.test(env)){env=env.replace(/^JWT_SECRET=$/m,'JWT_SECRET='+crypto.randomBytes(64).toString('hex'));changed=true;}if(/^JWT_REFRESH_SECRET=$/m.test(env)){env=env.replace(/^JWT_REFRESH_SECRET=$/m,'JWT_REFRESH_SECRET='+crypto.randomBytes(64).toString('hex'));changed=true;}if(/^SETTINGS_ENCRYPTION_KEY=$/m.test(env)){env=env.replace(/^SETTINGS_ENCRYPTION_KEY=$/m,'SETTINGS_ENCRYPTION_KEY='+crypto.randomBytes(16).toString('hex'));changed=true;}if(changed){fs.writeFileSync('.env',env);console.log('Generated missing secrets in .env');}else{console.log('Secrets already configured.');}"
+
+echo.
+echo Setting up database...
+node node_modules\\prisma\\build\\index.js generate
+node node_modules\\prisma\\build\\index.js migrate deploy
+echo.
+echo ======================================
+echo   Setup complete!
+echo ======================================
+echo.
+echo Run start.bat to launch the application.
 pause
 `
   );
