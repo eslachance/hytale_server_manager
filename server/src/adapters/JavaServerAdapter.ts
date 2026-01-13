@@ -41,6 +41,7 @@ export class JavaServerAdapter implements IServerAdapter {
   // Java configuration
   private javaPath: string;
   private jarFile: string;
+  private assetsPath: string;
   private javaArgs: string[];
   private serverArgs: string[];
   private workingDirectory: string;
@@ -66,6 +67,7 @@ export class JavaServerAdapter implements IServerAdapter {
     adapterConfig?: {
       javaPath?: string;
       jarFile?: string;
+      assetsPath?: string;
       minMemory?: string;
       maxMemory?: string;
       javaArgs?: string[];
@@ -84,7 +86,8 @@ export class JavaServerAdapter implements IServerAdapter {
 
     // Java configuration with defaults
     this.javaPath = adapterConfig?.javaPath || 'java';
-    this.jarFile = adapterConfig?.jarFile || 'HytaleServer.jar';
+    this.jarFile = adapterConfig?.jarFile || 'Server/HytaleServer.jar';
+    this.assetsPath = adapterConfig?.assetsPath || '../Assets.zip';
     const minMemory = adapterConfig?.minMemory || '1G';
     this.maxMemory = adapterConfig?.maxMemory || '2G';
     this.javaArgs = adapterConfig?.javaArgs || [
@@ -92,7 +95,9 @@ export class JavaServerAdapter implements IServerAdapter {
       `-Xmx${this.maxMemory}`,
       '-jar',
     ];
-    this.serverArgs = adapterConfig?.serverArgs || ['nogui'];
+    // Build server args with assets path
+    const defaultServerArgs = ['--assets', this.assetsPath];
+    this.serverArgs = adapterConfig?.serverArgs || defaultServerArgs;
 
     // RCON configuration (default port = server port + 10)
     this.rconPort = adapterConfig?.rconPort || (config.port + 10);
@@ -111,6 +116,7 @@ export class JavaServerAdapter implements IServerAdapter {
     logger.info(`JavaServerAdapter created for server ${serverId}`);
     logger.info(`Working directory: ${this.workingDirectory}`);
     logger.info(`JAR file: ${this.jarFile}`);
+    logger.info(`Assets path: ${this.assetsPath}`);
     logger.info(`Max memory: ${this.maxMemory}`);
     logger.info(`RCON port: ${this.rconPort}`);
   }
@@ -133,6 +139,9 @@ export class JavaServerAdapter implements IServerAdapter {
     }
 
     const jarPath = path.join(this.workingDirectory, this.jarFile);
+    // Get the directory containing the JAR file (for working directory)
+    const jarDir = path.dirname(jarPath);
+    const jarFileName = path.basename(this.jarFile);
 
     // Check if JAR file exists
     if (!await fs.pathExists(jarPath)) {
@@ -140,7 +149,8 @@ export class JavaServerAdapter implements IServerAdapter {
     }
 
     logger.info(`[Java] Starting server ${this.serverId}`);
-    logger.info(`[Java] Command: ${this.javaPath} ${this.javaArgs.join(' ')} ${this.jarFile} ${this.serverArgs.join(' ')}`);
+    logger.info(`[Java] Working directory: ${jarDir}`);
+    logger.info(`[Java] Command: ${this.javaPath} ${this.javaArgs.join(' ')} ${jarFileName} ${this.serverArgs.join(' ')}`);
 
     this.status.status = 'starting';
 
@@ -149,18 +159,26 @@ export class JavaServerAdapter implements IServerAdapter {
       await this.enableRconInProperties();
 
       // Spawn the Java process as DETACHED so it survives manager restart
+      // Use the JAR directory as working directory so relative paths work correctly
+      logger.info(`[Java] Spawning: ${this.javaPath} ${[...this.javaArgs, jarFileName, ...this.serverArgs].join(' ')}`);
+      logger.info(`[Java] Working directory: ${jarDir}`);
+
       this.process = spawn(
         this.javaPath,
-        [...this.javaArgs, this.jarFile, ...this.serverArgs],
+        [...this.javaArgs, jarFileName, ...this.serverArgs],
         {
-          cwd: this.workingDirectory,
+          cwd: jarDir,
           stdio: ['pipe', 'pipe', 'pipe'],
-          detached: true,  // Survive parent death
+          // Note: Not using detached mode so stdin/stdout work properly
+          // This means the server will stop if the manager stops
+          env: {
+            ...process.env,
+          },
+          windowsHide: true,  // Hide console window on Windows
         }
       );
 
-      // Allow manager to exit without killing child
-      this.process.unref();
+      logger.info(`[Java] Process spawned with PID: ${this.process.pid}`);
 
       this.startTime = new Date();
       this.currentPid = this.process.pid || null;
@@ -567,9 +585,10 @@ export class JavaServerAdapter implements IServerAdapter {
    * @returns Array of installed files for database tracking
    */
   async installMod(modFile: Buffer, metadata: ModMetadata): Promise<InstalledFile[]> {
-    logger.info(`[JavaAdapter] workingDirectory: ${this.workingDirectory}`);
-    const modsDir = path.join(this.workingDirectory, 'mods');
-    logger.info(`[JavaAdapter] modsDir: ${modsDir}`);
+    const modsDir = this.getModsDir();
+    // Relative path from workingDirectory for database storage
+    const modsRelativePath = path.relative(this.workingDirectory, modsDir).replace(/\\/g, '/');
+    logger.info(`[JavaAdapter] Installing mods to: ${modsDir}`);
 
     // Ensure mods directory exists
     await fs.ensureDir(modsDir);
@@ -605,7 +624,7 @@ export class JavaServerAdapter implements IServerAdapter {
 
           installedFiles.push({
             fileName,
-            filePath: `mods/${fileName}`,
+            filePath: `${modsRelativePath}/${fileName}`,
             fileSize: data.length,
             fileType: ext,
           });
@@ -617,13 +636,27 @@ export class JavaServerAdapter implements IServerAdapter {
       logger.info(`[JavaAdapter] Extracted ${installedFiles.length} files from modpack ${metadata.projectTitle}`);
     } else {
       // Single mod - save directly as JAR
-      const fileName = `${metadata.projectId}.jar`;
+      // Use original file name if provided, otherwise create one from project title
+      let fileName = metadata.fileName;
+      if (!fileName) {
+        // Sanitize project title for use as filename
+        const sanitizedTitle = metadata.projectTitle
+          .replace(/[<>:"/\\|?*]/g, '') // Remove invalid filename characters
+          .replace(/\s+/g, '-')          // Replace spaces with hyphens
+          .substring(0, 100);            // Limit length
+        fileName = `${sanitizedTitle}.jar`;
+      }
+      // Ensure .jar extension
+      if (!fileName.toLowerCase().endsWith('.jar')) {
+        fileName = `${fileName}.jar`;
+      }
+
       const targetPath = path.join(modsDir, fileName);
       await fs.writeFile(targetPath, modFile);
 
       installedFiles.push({
         fileName,
-        filePath: `mods/${fileName}`,
+        filePath: `${modsRelativePath}/${fileName}`,
         fileSize: modFile.length,
         fileType: 'jar',
       });
@@ -732,10 +765,18 @@ export class JavaServerAdapter implements IServerAdapter {
   }
 
   /**
+   * Get the mods directory path (relative to JAR location)
+   */
+  private getModsDir(): string {
+    const jarDir = path.dirname(path.join(this.workingDirectory, this.jarFile));
+    return path.join(jarDir, 'mods');
+  }
+
+  /**
    * List installed mods from the mods folder
    */
   async listInstalledMods(): Promise<Mod[]> {
-    const modsDir = path.join(this.workingDirectory, 'mods');
+    const modsDir = this.getModsDir();
 
     if (!await fs.pathExists(modsDir)) {
       return [];

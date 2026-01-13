@@ -23,11 +23,13 @@ export class LogTailService {
 
   /**
    * Start tailing a log file
+   * @param readRecentLines Number of recent lines to read from existing log content (0 to skip)
    */
   async startTailing(
     serverId: string,
     logPath: string,
-    onLog: (log: LogEntry) => void
+    onLog: (log: LogEntry) => void,
+    readRecentLines: number = 100
   ): Promise<void> {
     // Stop existing tail if any
     await this.stopTailing(serverId);
@@ -42,6 +44,19 @@ export class LogTailService {
     try {
       const stats = fs.statSync(logPath);
       filePosition = stats.size;
+
+      // Read recent historical content if requested
+      if (readRecentLines > 0 && filePosition > 0) {
+        logger.info(`[LogTail] Reading last ${readRecentLines} lines from ${logPath}`);
+        const recentLines = this.readLastNLines(logPath, readRecentLines);
+        for (const line of recentLines) {
+          const logEntry = this.parseLogLine(line);
+          if (logEntry) {
+            onLog(logEntry);
+          }
+        }
+        logger.info(`[LogTail] Emitted ${recentLines.length} historical log entries`);
+      }
     } catch {
       // File doesn't exist yet, start from 0
     }
@@ -285,8 +300,22 @@ export class LogTailService {
   }
 
   /**
+   * Read the last N lines from a file
+   */
+  private readLastNLines(filePath: string, numLines: number): string[] {
+    try {
+      const content = fs.readFileSync(filePath, 'utf8');
+      const lines = content.split('\n').filter(line => line.trim());
+      return lines.slice(-numLines);
+    } catch (error) {
+      logger.warn(`[LogTail] Failed to read last lines from ${filePath}: ${error}`);
+      return [];
+    }
+  }
+
+  /**
    * Find the log file path for a server
-   * Searches common locations
+   * Searches common locations including Hytale timestamped logs
    */
   static findLogFile(serverPath: string): string | null {
     const possiblePaths = [
@@ -299,6 +328,24 @@ export class LogTailService {
     for (const logPath of possiblePaths) {
       if (fs.existsSync(logPath)) {
         return logPath;
+      }
+    }
+
+    // Check for Hytale timestamped logs in Server/logs/
+    // Format: YYYY-MM-DD_HH-MM-SS_server.log
+    const hytaleLogsDir = path.join(serverPath, 'Server', 'logs');
+    if (fs.existsSync(hytaleLogsDir)) {
+      try {
+        const files = fs.readdirSync(hytaleLogsDir)
+          .filter(f => f.endsWith('_server.log'))
+          .sort()
+          .reverse();  // Most recent first (timestamp sorting)
+
+        if (files.length > 0) {
+          return path.join(hytaleLogsDir, files[0]);
+        }
+      } catch (error) {
+        logger.warn(`[LogTail] Error reading Hytale logs directory: ${error}`);
       }
     }
 

@@ -132,6 +132,9 @@ export class CurseForgeProvider implements IModProvider {
   private categories: CurseForgeCategory[] = [];
   private classificationMap: Map<number, UnifiedClassification> = new Map();
 
+  // Known Hytale game ID on CurseForge (fallback if not found in games list)
+  private static readonly HYTALE_GAME_ID = 70216;
+
   async initialize(config: ProviderConfig): Promise<void> {
     if (config.apiKey) {
       this.apiKey = config.apiKey;
@@ -201,7 +204,8 @@ export class CurseForgeProvider implements IModProvider {
         (g) => g.slug === 'hytale' ||
                g.name.toLowerCase() === 'hytale' ||
                g.slug.includes('hytale') ||
-               g.name.toLowerCase().includes('hytale')
+               g.name.toLowerCase().includes('hytale') ||
+               g.id === CurseForgeProvider.HYTALE_GAME_ID
       );
 
       if (hytale) {
@@ -209,16 +213,17 @@ export class CurseForgeProvider implements IModProvider {
         logger.info(`[CurseForgeProvider] Discovered Hytale game ID: ${this.hytaleGameId} (name: ${hytale.name}, slug: ${hytale.slug})`);
         await this.loadCategories();
       } else {
-        logger.warn('[CurseForgeProvider] Hytale not found in CurseForge games list');
-        // List available games for debugging (first 20)
-        const gameNames = response.data.slice(0, 20).map((g) => `${g.name} (${g.slug}, id:${g.id})`).join(', ');
-        logger.info(`[CurseForgeProvider] Sample of available games: ${gameNames}`);
-        if (response.data.length > 20) {
-          logger.info(`[CurseForgeProvider] ... and ${response.data.length - 20} more games`);
-        }
+        // Use the known Hytale game ID as fallback
+        logger.warn('[CurseForgeProvider] Hytale not found in games list, using known game ID');
+        this.hytaleGameId = CurseForgeProvider.HYTALE_GAME_ID;
+        logger.info(`[CurseForgeProvider] Using known Hytale game ID: ${this.hytaleGameId}`);
+        await this.loadCategories();
       }
     } catch (error) {
       logger.error('[CurseForgeProvider] Failed to discover Hytale game:', error);
+      // Still use the known ID as a last resort
+      this.hytaleGameId = CurseForgeProvider.HYTALE_GAME_ID;
+      logger.info(`[CurseForgeProvider] Using fallback Hytale game ID: ${this.hytaleGameId}`);
     }
   }
 

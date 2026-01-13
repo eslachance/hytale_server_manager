@@ -196,7 +196,7 @@ export const ConsolePage = () => {
           <div className="bg-white dark:bg-primary-bg rounded-lg p-4 font-mono text-sm h-96 overflow-y-auto custom-scrollbar">
             {logs.length === 0 ? (
               <div className="text-text-light-muted dark:text-text-muted text-center py-8">
-                {selectedServerData?.status === 'running'
+                {['running', 'starting'].includes(selectedServerData?.status || '')
                   ? 'Waiting for logs...'
                   : 'Start the server to see console output'}
               </div>
@@ -224,20 +224,20 @@ export const ConsolePage = () => {
               onKeyDown={(e) => e.key === 'Enter' && handleSendCommand()}
               placeholder="Enter command..."
               className="flex-1 px-4 py-2 bg-white dark:bg-primary-bg border border-gray-300 dark:border-gray-700 rounded-lg text-text-light-primary dark:text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent-primary/50 font-mono"
-              disabled={selectedServerData?.status !== 'running'}
+              disabled={!['running', 'starting'].includes(selectedServerData?.status || '')}
             />
             <Button
               variant="primary"
               icon={<Send size={18} />}
               onClick={handleSendCommand}
-              disabled={selectedServerData?.status !== 'running' || !command.trim()}
+              disabled={!['running', 'starting'].includes(selectedServerData?.status || '') || !command.trim()}
             >
               Send
             </Button>
           </div>
 
-          {selectedServerData?.status !== 'running' && (
-            <p className="text-warning text-sm mt-2">Server must be running to execute commands</p>
+          {!['running', 'starting'].includes(selectedServerData?.status || '') && selectedServerData && (
+            <p className="text-warning text-sm mt-2">Server must be running or starting to execute commands</p>
           )}
         </CardContent>
       </Card>

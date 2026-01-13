@@ -46,6 +46,7 @@ interface StorageSettings {
 interface AdvancedSettings {
   jvmArgs: string;
   jarFile: string;
+  assetsPath: string;
   javaPath: string;
 }
 
@@ -94,7 +95,8 @@ export const ServerSettingsPage = () => {
   // Advanced settings state
   const [advancedSettings, setAdvancedSettings] = useState<AdvancedSettings>({
     jvmArgs: '-Xms1G -Xmx2G',
-    jarFile: 'HytaleServer.jar',
+    jarFile: 'Server/HytaleServer.jar',
+    assetsPath: '../Assets.zip',
     javaPath: 'java',
   });
 
@@ -145,7 +147,7 @@ export const ServerSettingsPage = () => {
       });
 
       // Parse adapter config
-      let adapterConfig: { jarFile?: string; javaPath?: string } = {};
+      let adapterConfig: { jarFile?: string; assetsPath?: string; javaPath?: string } = {};
       if (serverData.adapterConfig) {
         try {
           adapterConfig = JSON.parse(serverData.adapterConfig);
@@ -157,7 +159,8 @@ export const ServerSettingsPage = () => {
       // Populate advanced settings
       setAdvancedSettings({
         jvmArgs: serverData.jvmArgs || '-Xms1G -Xmx2G',
-        jarFile: adapterConfig.jarFile || 'HytaleServer.jar',
+        jarFile: adapterConfig.jarFile || 'Server/HytaleServer.jar',
+        assetsPath: adapterConfig.assetsPath || '../Assets.zip',
         javaPath: adapterConfig.javaPath || 'java',
       });
     } catch (err: any) {
@@ -277,6 +280,7 @@ export const ServerSettingsPage = () => {
           jvmArgs: advancedSettings.jvmArgs,
           adapterConfig: {
             jarFile: advancedSettings.jarFile,
+            assetsPath: advancedSettings.assetsPath,
             javaPath: advancedSettings.javaPath,
           },
         };
@@ -331,7 +335,7 @@ export const ServerSettingsPage = () => {
     });
 
     // Parse adapter config for reset
-    let adapterConfig: { jarFile?: string; javaPath?: string } = {};
+    let adapterConfig: { jarFile?: string; assetsPath?: string; javaPath?: string } = {};
     if (server.adapterConfig) {
       try {
         adapterConfig = JSON.parse(server.adapterConfig);
@@ -342,7 +346,8 @@ export const ServerSettingsPage = () => {
 
     setAdvancedSettings({
       jvmArgs: server.jvmArgs || '-Xms1G -Xmx2G',
-      jarFile: adapterConfig.jarFile || 'HytaleServer.jar',
+      jarFile: adapterConfig.jarFile || 'Server/HytaleServer.jar',
+      assetsPath: adapterConfig.assetsPath || '../Assets.zip',
       javaPath: adapterConfig.javaPath || 'java',
     });
 
@@ -707,18 +712,35 @@ export const ServerSettingsPage = () => {
 
               {/* JAR File Name */}
               <div>
-                <label className="block text-sm text-text-light-muted dark:text-text-muted mb-2">JAR File Name</label>
+                <label className="block text-sm text-text-light-muted dark:text-text-muted mb-2">JAR File Path</label>
                 <Input
                   value={advancedSettings.jarFile}
                   onChange={(e) => {
                     setAdvancedSettings(prev => ({ ...prev, jarFile: e.target.value }));
                     setHasChanges(true);
                   }}
-                  placeholder="HytaleServer.jar"
+                  placeholder="Server/HytaleServer.jar"
                   className="font-mono"
                 />
                 <p className="text-xs text-text-light-muted dark:text-text-muted mt-1">
-                  The name of the server JAR file in the server directory. Change this if you renamed or updated the JAR file.
+                  Path to the server JAR file relative to the server directory.
+                </p>
+              </div>
+
+              {/* Assets Path */}
+              <div>
+                <label className="block text-sm text-text-light-muted dark:text-text-muted mb-2">Assets Path</label>
+                <Input
+                  value={advancedSettings.assetsPath}
+                  onChange={(e) => {
+                    setAdvancedSettings(prev => ({ ...prev, assetsPath: e.target.value }));
+                    setHasChanges(true);
+                  }}
+                  placeholder="../Assets.zip"
+                  className="font-mono"
+                />
+                <p className="text-xs text-text-light-muted dark:text-text-muted mt-1">
+                  Path to the Assets.zip file relative to the JAR file location. Used with --assets argument.
                 </p>
               </div>
 

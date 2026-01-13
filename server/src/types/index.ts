@@ -105,6 +105,7 @@ export interface ModMetadata {
   classification: string;
   fileSize: number;
   fileHash?: string;
+  fileName?: string;  // Original file name from provider
 }
 
 // Installed file info returned from adapter

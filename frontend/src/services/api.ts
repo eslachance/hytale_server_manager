@@ -321,6 +321,7 @@ class ApiService {
     jvmArgs: string;
     adapterConfig: {
       jarFile?: string;
+      assetsPath?: string;
       javaPath?: string;
       [key: string]: unknown;
     };

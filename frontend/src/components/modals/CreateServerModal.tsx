@@ -21,6 +21,7 @@ export interface ServerFormData {
   jvmArgs?: string;
   adapterConfig?: {
     jarFile?: string;
+    assetsPath?: string;
     javaPath?: string;
   };
 }
@@ -57,14 +58,6 @@ export const CreateServerModal = ({ isOpen, onClose, onSubmit }: CreateServerMod
 
     if (formData.port < 1 || formData.port > 65535) {
       newErrors.port = 'Port must be between 1 and 65535';
-    }
-
-    if (!formData.version.trim()) {
-      newErrors.version = 'Version is required';
-    }
-
-    if (formData.maxPlayers < 1 || formData.maxPlayers > 1000) {
-      newErrors.maxPlayers = 'Max players must be between 1 and 1000';
     }
 
     if (!formData.gameMode.trim()) {
@@ -191,7 +184,6 @@ export const CreateServerModal = ({ isOpen, onClose, onSubmit }: CreateServerMod
           {/* Hytale Server Download */}
           <HytaleServerDownloadSection
             serverPath={formData.serverPath}
-            onVersionSet={(version) => updateField('version', version)}
           />
 
           {/* Address and Port */}
@@ -223,39 +215,6 @@ export const CreateServerModal = ({ isOpen, onClose, onSubmit }: CreateServerMod
               />
               {errors.port && (
                 <p className="text-danger text-sm mt-1">{errors.port}</p>
-              )}
-            </div>
-          </div>
-
-          {/* Version and Max Players */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-text-light-primary dark:text-text-primary mb-2">
-                Version *
-              </label>
-              <Input
-                type="text"
-                placeholder="1.0.0"
-                value={formData.version}
-                onChange={(e) => updateField('version', e.target.value)}
-              />
-              {errors.version && (
-                <p className="text-danger text-sm mt-1">{errors.version}</p>
-              )}
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-text-light-primary dark:text-text-primary mb-2">
-                Max Players *
-              </label>
-              <Input
-                type="number"
-                placeholder="20"
-                value={formData.maxPlayers}
-                onChange={(e) => updateField('maxPlayers', parseInt(e.target.value) || 0)}
-              />
-              {errors.maxPlayers && (
-                <p className="text-danger text-sm mt-1">{errors.maxPlayers}</p>
               )}
             </div>
           </div>
@@ -294,7 +253,8 @@ export const CreateServerModal = ({ isOpen, onClose, onSubmit }: CreateServerMod
                     adapterType: 'java',
                     jvmArgs: '-Xms1G -Xmx2G',
                     adapterConfig: {
-                      jarFile: 'HytaleServer.jar',
+                      jarFile: 'Server/HytaleServer.jar',
+                      assetsPath: '../Assets.zip',
                       javaPath: 'java',
                     },
                   }));
@@ -325,19 +285,37 @@ export const CreateServerModal = ({ isOpen, onClose, onSubmit }: CreateServerMod
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-text-light-primary dark:text-text-primary mb-2">
-                    JAR File Name
+                    JAR File Path
                   </label>
                   <Input
                     type="text"
-                    placeholder="HytaleServer.jar"
-                    value={formData.adapterConfig?.jarFile || 'HytaleServer.jar'}
+                    placeholder="Server/HytaleServer.jar"
+                    value={formData.adapterConfig?.jarFile || 'Server/HytaleServer.jar'}
                     onChange={(e) => setFormData(prev => ({
                       ...prev,
                       adapterConfig: { ...prev.adapterConfig, jarFile: e.target.value },
                     }))}
                   />
                   <p className="text-xs text-text-light-muted dark:text-text-muted mt-1">
-                    Name of the JAR file in the server directory
+                    Path to the JAR file relative to the server directory
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-text-light-primary dark:text-text-primary mb-2">
+                    Assets Path
+                  </label>
+                  <Input
+                    type="text"
+                    placeholder="../Assets.zip"
+                    value={formData.adapterConfig?.assetsPath || '../Assets.zip'}
+                    onChange={(e) => setFormData(prev => ({
+                      ...prev,
+                      adapterConfig: { ...prev.adapterConfig, assetsPath: e.target.value },
+                    }))}
+                  />
+                  <p className="text-xs text-text-light-muted dark:text-text-muted mt-1">
+                    Path to Assets.zip relative to the JAR file
                   </p>
                 </div>
 

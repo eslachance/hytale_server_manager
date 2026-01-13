@@ -505,6 +505,7 @@ export function createServerRoutes(
    *     projectTitle: string,
    *     projectIconUrl?: string,
    *     classification: string,
+   *     fileName?: string,    // Original file name from provider (used for saving the file)
    *   }
    * }
    */

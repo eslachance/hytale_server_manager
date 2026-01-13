@@ -2,7 +2,6 @@ import path from 'path';
 import fs from 'fs-extra';
 import axios from 'axios';
 import { spawn, ChildProcess } from 'child_process';
-import { Extract } from 'unzipper';
 import { EventEmitter } from 'events';
 import { PrismaClient } from '@prisma/client';
 import { getBasePath_ } from '../config';
@@ -80,6 +79,7 @@ export interface DownloadOptions {
 
 class HytaleDownloaderService extends EventEmitter {
   private dataDir: string;
+  private cacheDir: string;
   private activeSessions: Map<string, ChildProcess> = new Map();
   private oauthSessions: Map<string, OAuthSession> = new Map();
   private downloadSessions: Map<string, DownloadSession> = new Map();
@@ -89,8 +89,74 @@ class HytaleDownloaderService extends EventEmitter {
   constructor() {
     super();
     this.dataDir = path.join(getBasePath_(), 'data', 'hytale-downloader');
+    this.cacheDir = path.join(getBasePath_(), 'data', 'server_files');
     // Initialize auto-refresh on startup
     this.initAutoRefresh();
+  }
+
+  /**
+   * Get cached server file path for a version
+   */
+  private getCacheFilePath(version: string, patchline: string): string {
+    return path.join(this.cacheDir, `hytale-server-${patchline}-${version}.zip`);
+  }
+
+  /**
+   * Check if a cached version exists
+   */
+  async hasCachedVersion(version: string, patchline: string): Promise<boolean> {
+    const cachePath = this.getCacheFilePath(version, patchline);
+    return fs.pathExists(cachePath);
+  }
+
+  /**
+   * Extract a zip file using native system tools (handles large files)
+   */
+  private async extractZip(zipPath: string, destPath: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const isWindows = process.platform === 'win32';
+
+      let command: string;
+      let args: string[];
+
+      if (isWindows) {
+        // Use PowerShell's Expand-Archive for reliable extraction on Windows
+        command = 'powershell.exe';
+        args = [
+          '-NoProfile',
+          '-Command',
+          `Expand-Archive -Path "${zipPath}" -DestinationPath "${destPath}" -Force`,
+        ];
+      } else {
+        // Use unzip on Linux/Mac
+        command = 'unzip';
+        args = ['-o', zipPath, '-d', destPath];
+      }
+
+      logger.info(`[HytaleDownloader] Running extraction: ${command} ${args.join(' ')}`);
+
+      const proc = spawn(command, args, {
+        stdio: ['pipe', 'pipe', 'pipe'],
+      });
+
+      let stderr = '';
+
+      proc.stderr.on('data', (data) => {
+        stderr += data.toString();
+      });
+
+      proc.on('close', (code) => {
+        if (code === 0) {
+          resolve();
+        } else {
+          reject(new Error(`Extraction failed with code ${code}: ${stderr}`));
+        }
+      });
+
+      proc.on('error', (err) => {
+        reject(new Error(`Failed to start extraction: ${err.message}`));
+      });
+    });
   }
 
   /**
@@ -913,13 +979,89 @@ class HytaleDownloaderService extends EventEmitter {
 
     const sessionId = `download-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
-    logger.info('[HytaleDownloader] Starting download, session:', sessionId, 'path:', options.destinationPath);
+    // Determine the actual download path
+    // If destinationPath is a directory, append the default filename
+    let downloadPath = options.destinationPath;
+
+    // Ensure the path is absolute (the binary runs from a different cwd)
+    if (!path.isAbsolute(downloadPath)) {
+      downloadPath = path.resolve(downloadPath);
+    }
+
+    // Check if it's a directory (or looks like one - no extension)
+    const hasExtension = path.extname(downloadPath).length > 0;
+    const isExistingDir = await fs.pathExists(downloadPath) && (await fs.stat(downloadPath)).isDirectory();
+
+    if (isExistingDir || !hasExtension) {
+      // Ensure the directory exists
+      await fs.ensureDir(downloadPath);
+      // Append default filename
+      downloadPath = path.join(downloadPath, 'hytale-server.zip');
+    }
+
+    const patchline = options.patchline || 'release';
+    const extractPath = path.dirname(downloadPath);
+
+    logger.info(`[HytaleDownloader] Starting download, session: ${sessionId}, path: ${downloadPath}`);
+
+    // Check if we have a cached version available
+    const currentVersion = await this.getGameVersion(patchline);
+    if (currentVersion?.version) {
+      const hasCached = await this.hasCachedVersion(currentVersion.version, patchline);
+      if (hasCached) {
+        logger.info(`[HytaleDownloader] Found cached version: ${currentVersion.version}`);
+
+        // Create session for cache extraction
+        const session: DownloadSession = {
+          sessionId,
+          destinationPath: extractPath,
+          patchline,
+          status: 'extracting',
+          progress: 100,
+          bytesDownloaded: 0,
+          totalBytes: 0,
+          speed: 0,
+        };
+        this.downloadSessions.set(sessionId, session);
+
+        // Emit extracting status
+        this.emit('download:progress', {
+          sessionId,
+          progress: 100,
+          bytesDownloaded: 0,
+          totalBytes: 0,
+          speed: 0,
+          status: 'extracting',
+        });
+
+        // Extract from cache
+        const cachePath = this.getCacheFilePath(currentVersion.version, patchline);
+        try {
+          await fs.ensureDir(extractPath);
+          await this.extractZip(cachePath, extractPath);
+
+          logger.info(`[HytaleDownloader] Extracted from cache to ${extractPath}`);
+
+          session.status = 'complete';
+          this.downloadSessions.set(sessionId, session);
+          this.emit('download:complete', {
+            sessionId,
+            outputPath: extractPath,
+          });
+
+          return session;
+        } catch (cacheError: any) {
+          logger.warn(`[HytaleDownloader] Cache extraction failed, will download fresh: ${cacheError.message}`);
+          // Continue to download if cache extraction fails
+        }
+      }
+    }
 
     // Create session state
     const session: DownloadSession = {
       sessionId,
-      destinationPath: options.destinationPath,
-      patchline: options.patchline || 'release',
+      destinationPath: downloadPath,
+      patchline,
       status: 'downloading',
       progress: 0,
       bytesDownloaded: 0,
@@ -931,8 +1073,8 @@ class HytaleDownloaderService extends EventEmitter {
     // Build command args
     const args: string[] = [];
 
-    if (options.destinationPath) {
-      args.push('-download-path', options.destinationPath);
+    if (downloadPath) {
+      args.push('-download-path', downloadPath);
     }
 
     if (options.patchline) {
@@ -943,10 +1085,27 @@ class HytaleDownloaderService extends EventEmitter {
       args.push('-skip-update-check');
     }
 
+    // Log the full command for debugging
+    const binaryPath = this.getBinaryPath();
+    const credentialsPath = this.getCredentialsPath();
+
+    // Verify files exist before spawning
+    const binaryExists = await fs.pathExists(binaryPath);
+    const credsExist = await fs.pathExists(credentialsPath);
+    logger.info(`[HytaleDownloader] Binary exists: ${binaryExists} at ${binaryPath}`);
+    logger.info(`[HytaleDownloader] Credentials exist: ${credsExist} at ${credentialsPath}`);
+    logger.info(`[HytaleDownloader] Executing: ${binaryPath} with args: ${args.join(' ')}`);
+    logger.info(`[HytaleDownloader] Working directory: ${this.dataDir}`);
+
     // Spawn download process
-    const proc = spawn(this.getBinaryPath(), args, {
+    // Use shell on Windows to better capture output
+    const isWindows = process.platform === 'win32';
+    const proc = spawn(binaryPath, args, {
       cwd: this.dataDir,
       env: { ...process.env },
+      stdio: ['pipe', 'pipe', 'pipe'],
+      shell: isWindows,
+      windowsHide: true,
     });
 
     this.activeSessions.set(sessionId, proc);
@@ -1017,17 +1176,66 @@ class HytaleDownloaderService extends EventEmitter {
       parseProgress(text);
     });
 
-    proc.on('close', (code) => {
-      logger.info('[HytaleDownloader] Download process exited with code:', code);
+    proc.on('close', async (code, signal) => {
+      logger.info(`[HytaleDownloader] Download process exited with code: ${code}, signal: ${signal}`);
       this.activeSessions.delete(sessionId);
 
       if (code === 0) {
-        session.status = 'complete';
+        // Download complete, now extract
+        session.status = 'extracting';
         session.progress = 100;
-        this.emit('download:complete', {
+        this.downloadSessions.set(sessionId, session);
+        this.emit('download:progress', {
           sessionId,
-          outputPath: session.destinationPath,
+          progress: 100,
+          bytesDownloaded: session.bytesDownloaded,
+          totalBytes: session.totalBytes,
+          speed: 0,
+          status: 'extracting',
         });
+
+        // Extract to the parent directory of the zip file
+        const extractPath = path.dirname(session.destinationPath);
+        logger.info(`[HytaleDownloader] Extracting ${session.destinationPath} to ${extractPath}`);
+
+        try {
+          // Use native tar command for extraction (handles large files)
+          // Windows 10+ has tar built-in that supports zip files
+          await this.extractZip(session.destinationPath, extractPath);
+
+          logger.info(`[HytaleDownloader] Extraction complete`);
+
+          // Cache the zip file for future use (before deleting)
+          const patchline = session.patchline || 'release';
+          const version = await this.getGameVersion(patchline);
+          if (version?.version) {
+            const cachePath = this.getCacheFilePath(version.version, patchline);
+            await fs.ensureDir(this.cacheDir);
+            await fs.copy(session.destinationPath, cachePath);
+            logger.info(`[HytaleDownloader] Cached server files: ${cachePath}`);
+          }
+
+          // Delete the zip file after extraction and caching
+          await fs.remove(session.destinationPath);
+          logger.info(`[HytaleDownloader] Removed zip file: ${session.destinationPath}`);
+
+          session.status = 'complete';
+          session.destinationPath = extractPath; // Update to extracted path
+          this.downloadSessions.set(sessionId, session);
+          this.emit('download:complete', {
+            sessionId,
+            outputPath: extractPath,
+          });
+        } catch (extractError: any) {
+          logger.error(`[HytaleDownloader] Extraction failed:`, extractError);
+          session.status = 'failed';
+          session.error = `Extraction failed: ${extractError.message}`;
+          this.downloadSessions.set(sessionId, session);
+          this.emit('download:error', {
+            sessionId,
+            error: session.error,
+          });
+        }
       } else {
         session.status = 'failed';
         session.error = `Download failed with exit code ${code}`;
@@ -1035,8 +1243,8 @@ class HytaleDownloaderService extends EventEmitter {
           sessionId,
           error: session.error,
         });
+        this.downloadSessions.set(sessionId, session);
       }
-      this.downloadSessions.set(sessionId, session);
     });
 
     proc.on('error', (err) => {

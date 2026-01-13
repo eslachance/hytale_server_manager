@@ -382,9 +382,15 @@ export const useHytaleDownloaderStore = create<HytaleDownloaderStore>((set, get)
 
     logger.debug('Connecting to hytale-downloader WebSocket');
 
+    // Get auth token from localStorage (same pattern as websocket.ts)
+    const token = localStorage.getItem('accessToken');
+
     const newSocket = io(`${env.websocket.url}/hytale-downloader`, {
       withCredentials: true,
-      transports: ['websocket'],
+      transports: ['websocket', 'polling'],
+      auth: {
+        token,
+      },
     });
 
     newSocket.on('connect', () => {

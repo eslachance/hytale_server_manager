@@ -226,6 +226,7 @@ export const ModpacksPage = () => {
         versionName: version?.version || 'Latest',
         classification: selectedProject.classification,
         fileSize: version?.fileSize || 0,
+        fileName: version?.fileName,
       });
       updateStatus(queueId, 'completed');
       toast.success('Installation complete', `${selectedProject.title} has been installed`);
