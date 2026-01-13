@@ -8,6 +8,8 @@ import {
   Users,
   Cpu,
   HardDrive,
+  Skull,
+  Trash2,
 } from 'lucide-react';
 import { Button, Badge } from '../ui';
 import type { ServerNetworkMember } from '../../types';
@@ -25,7 +27,7 @@ interface NetworkServerRowProps {
   member: ServerNetworkMember;
   memberStatus?: MemberStatus;
   isLast: boolean;
-  onAction: (serverId: string, action: 'start' | 'stop' | 'restart') => void;
+  onAction: (serverId: string, action: 'start' | 'stop' | 'restart' | 'kill' | 'delete') => void;
 }
 
 export const NetworkServerRow = ({
@@ -39,6 +41,11 @@ export const NetworkServerRow = ({
   const serverStatus = memberStatus?.status || member.server.status || 'stopped';
   const isRunning = serverStatus === 'running';
   const isStopped = serverStatus === 'stopped';
+  const isStopping = serverStatus === 'stopping';
+  const isStarting = serverStatus === 'starting';
+  const isCrashed = serverStatus === 'crashed';
+  const canStart = isStopped || isCrashed;
+  const canDelete = isStopped || isCrashed;
 
   const getStatusColor = () => {
     switch (serverStatus) {
@@ -148,13 +155,30 @@ export const NetworkServerRow = ({
 
       {/* Server Actions */}
       <div className="flex items-center gap-1">
-        {isStopped ? (
+        {isStopping ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={<Skull size={14} />}
+            onClick={() => onAction(member.serverId, 'kill')}
+            className="text-danger hover:bg-danger/10"
+            title="Force Kill Server"
+          />
+        ) : canStart ? (
           <Button
             variant="ghost"
             size="sm"
             icon={<Play size={14} />}
             onClick={() => onAction(member.serverId, 'start')}
             title="Start Server"
+          />
+        ) : isStarting ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={<Play size={14} />}
+            disabled
+            title="Starting..."
           />
         ) : (
           <Button
@@ -170,7 +194,7 @@ export const NetworkServerRow = ({
           size="sm"
           icon={<RotateCw size={14} />}
           onClick={() => onAction(member.serverId, 'restart')}
-          disabled={isStopped}
+          disabled={canStart || isStopping || isStarting}
           title="Restart Server"
         />
         <Button
@@ -187,6 +211,15 @@ export const NetworkServerRow = ({
           icon={<Settings size={14} />}
           onClick={() => navigate(`/servers/${member.serverId}`)}
           title="Server Settings"
+        />
+        <Button
+          variant="ghost"
+          size="sm"
+          icon={<Trash2 size={14} />}
+          onClick={() => onAction(member.serverId, 'delete')}
+          disabled={!canDelete}
+          className="text-danger hover:bg-danger/10"
+          title={!canDelete ? 'Stop server before deleting' : 'Delete Server'}
         />
       </div>
     </div>

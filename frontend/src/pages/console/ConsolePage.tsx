@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { useParams } from 'react-router-dom';
 import { Card, CardHeader, CardTitle, CardContent, Button, Badge } from '../../components/ui';
 import { Send, Download, Trash2 } from 'lucide-react';
 import { useToast } from '../../stores/toastStore';
@@ -20,6 +21,7 @@ interface Server {
 }
 
 export const ConsolePage = () => {
+  const { serverId } = useParams<{ serverId?: string }>();
   const toast = useToast();
   const [servers, setServers] = useState<Server[]>([]);
   const [selectedServer, setSelectedServer] = useState<string>('');
@@ -83,9 +85,13 @@ export const ConsolePage = () => {
       const data = await api.getServers<Server>();
       setServers(data.map((s) => ({ id: s.id, name: s.name, status: s.status })));
 
-      // Select first server by default
+      // Select server from URL param if provided, otherwise first server
       if (data.length > 0 && !selectedServer) {
-        setSelectedServer(data[0].id);
+        if (serverId && data.some((s) => s.id === serverId)) {
+          setSelectedServer(serverId);
+        } else {
+          setSelectedServer(data[0].id);
+        }
       }
     } catch (error) {
       console.error('Error fetching servers:', error);

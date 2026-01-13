@@ -124,6 +124,14 @@ export class JavaServerAdapter implements IServerAdapter {
       throw new Error('Server is already running');
     }
 
+    // Stop any existing log tailing to release file handles before server start
+    // This is important on Windows where file locking is strict
+    if (this.logTailService.isTailing(this.serverId)) {
+      await this.logTailService.stopTailing(this.serverId);
+      // Give Windows time to fully release the file handle
+      await this.delay(500);
+    }
+
     const jarPath = path.join(this.workingDirectory, this.jarFile);
 
     // Check if JAR file exists
@@ -244,6 +252,11 @@ export class JavaServerAdapter implements IServerAdapter {
 
     // Stop process monitoring
     this.stopProcessMonitoring();
+
+    // Stop log tailing to release file handles (important on Windows)
+    if (this.logTailService.isTailing(this.serverId)) {
+      await this.logTailService.stopTailing(this.serverId);
+    }
 
     // Send stop command to server
     await this.sendCommand('stop');

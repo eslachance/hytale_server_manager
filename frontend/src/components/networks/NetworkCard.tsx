@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
   ChevronDown,
   ChevronRight,
@@ -11,7 +10,6 @@ import {
   HardDrive,
   Settings,
   Trash2,
-  UserPlus,
 } from 'lucide-react';
 import { Card, Button, Badge } from '../ui';
 import { NetworkServerRow } from './NetworkServerRow';
@@ -33,7 +31,7 @@ interface NetworkCardProps {
   onRestartNetwork: (networkId: string) => void;
   onDeleteNetwork: (networkId: string) => void;
   onManageServers: (network: NetworkWithMembers) => void;
-  onServerAction: (serverId: string, action: 'start' | 'stop' | 'restart') => void;
+  onServerAction: (serverId: string, action: 'start' | 'stop' | 'restart' | 'kill' | 'delete') => void;
   isLoading?: boolean;
 }
 
@@ -51,7 +49,6 @@ export const NetworkCard = ({
   onServerAction,
   isLoading,
 }: NetworkCardProps) => {
-  const navigate = useNavigate();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const networkStatus = status?.status || 'stopped';
@@ -217,16 +214,9 @@ export const NetworkCard = ({
             <Button
               variant="ghost"
               size="sm"
-              icon={<UserPlus size={16} />}
+              icon={<Settings size={16} />}
               onClick={() => onManageServers(network)}
               title="Manage Servers"
-            />
-            <Button
-              variant="ghost"
-              size="sm"
-              icon={<Settings size={16} />}
-              onClick={() => navigate(`/networks/${network.id}`)}
-              title="Network Settings"
             />
             <Button
               variant="ghost"

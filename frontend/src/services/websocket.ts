@@ -20,8 +20,14 @@ class WebSocketService {
       return this.serversSocket;
     }
 
+    // Get auth token from localStorage
+    const token = localStorage.getItem('accessToken');
+
     this.serversSocket = io(`${this.baseUrl}/servers`, {
       transports: ['websocket', 'polling'],
+      auth: {
+        token,
+      },
     });
 
     this.serversSocket.on('connect', () => {});
@@ -82,8 +88,14 @@ class WebSocketService {
       return this.consoleSocket;
     }
 
+    // Get auth token from localStorage
+    const token = localStorage.getItem('accessToken');
+
     this.consoleSocket = io(`${this.baseUrl}/console`, {
       transports: ['websocket', 'polling'],
+      auth: {
+        token,
+      },
     });
 
     this.consoleSocket.on('connect', () => {});

@@ -285,7 +285,7 @@ function App() {
               />
 
               <Route
-                path="console"
+                path="console/:serverId?"
                 element={
                   <ProtectedRoute pageName="Console">
                     <RequirePermission permission={PERMISSIONS.SERVERS_CONSOLE}>

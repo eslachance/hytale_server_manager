@@ -33,13 +33,16 @@ export interface JWTPayload {
 
 /**
  * Authentication response from the API
- * Note: Tokens are now stored in httpOnly cookies, not returned in response body
+ * Note: Tokens are stored in httpOnly cookies AND returned in response body
+ * (the body token is used for WebSocket authentication since WebSockets can't access httpOnly cookies)
  */
 export interface AuthResponse {
   /** User information */
   user: User;
   /** Token expiration in seconds */
   expiresIn: number;
+  /** Access token for WebSocket authentication */
+  accessToken?: string;
 }
 
 /**
@@ -164,7 +167,12 @@ class AuthService {
 
       const data: AuthResponse = await response.json();
 
-      // Tokens are now stored in httpOnly cookies by the server
+      // Tokens are stored in httpOnly cookies by the server
+      // Also store access token in localStorage for WebSocket authentication
+      if (data.accessToken) {
+        localStorage.setItem('accessToken', data.accessToken);
+      }
+
       // Schedule refresh based on expiry time
       this.scheduleTokenRefresh(data.expiresIn);
 
@@ -211,6 +219,9 @@ class AuthService {
         logger.warn('Logout API call failed:', error);
       }
     }
+
+    // Clear access token from localStorage (used for WebSocket auth)
+    localStorage.removeItem('accessToken');
   }
 
   /**
@@ -261,6 +272,11 @@ class AuthService {
       const data: AuthResponse = await response.json();
 
       // Tokens are stored in httpOnly cookies by the server
+      // Also store access token in localStorage for WebSocket authentication
+      if (data.accessToken) {
+        localStorage.setItem('accessToken', data.accessToken);
+      }
+
       this.scheduleTokenRefresh(data.expiresIn);
 
       logger.debug('Token refreshed successfully');

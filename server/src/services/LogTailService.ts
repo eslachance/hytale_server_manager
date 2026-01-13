@@ -55,36 +55,42 @@ export class LogTailService {
       isActive: true,
     };
 
-    // Watch the log file
-    const watcher = chokidar.watch(logPath, {
+    // Watch the parent directory instead of the file directly
+    // This avoids file locking issues on Windows where watching a file directly
+    // can prevent other processes from deleting/writing to it
+    const logDir = path.dirname(logPath);
+    const logFileName = path.basename(logPath);
+
+    const watcher = chokidar.watch(logDir, {
       persistent: true,
       usePolling: true,       // More reliable for files being written to
       interval: 100,          // Poll every 100ms
-      awaitWriteFinish: {
-        stabilityThreshold: 100,
-        pollInterval: 50,
-      },
+      depth: 0,               // Only watch the directory, not subdirs
+      ignoreInitial: false,   // Trigger on initial scan to catch existing files
     });
 
     state.watcher = watcher;
 
-    // Handle file changes
-    watcher.on('change', async () => {
+    // Handle file changes - filter for our specific log file
+    watcher.on('change', async (changedPath) => {
       if (!state.isActive) return;
+      if (path.basename(changedPath) !== logFileName) return;
       await this.readNewLines(state);
     });
 
     // Handle file creation (in case it didn't exist)
-    watcher.on('add', async (filePath) => {
+    watcher.on('add', async (addedPath) => {
       if (!state.isActive) return;
-      logger.info(`[LogTail] Log file created: ${filePath}`);
+      if (path.basename(addedPath) !== logFileName) return;
+      logger.info(`[LogTail] Log file created: ${addedPath}`);
       state.filePosition = 0;
       await this.readNewLines(state);
     });
 
     // Handle log rotation (file replaced)
-    watcher.on('unlink', (filePath) => {
-      logger.info(`[LogTail] Log file removed (rotation?): ${filePath}`);
+    watcher.on('unlink', (removedPath) => {
+      if (path.basename(removedPath) !== logFileName) return;
+      logger.info(`[LogTail] Log file removed (rotation?): ${removedPath}`);
       state.filePosition = 0;
     });
 
@@ -126,6 +132,9 @@ export class LogTailService {
   private async readNewLines(state: TailState): Promise<void> {
     if (!state.isActive) return;
 
+    let stream: fs.ReadStream | null = null;
+    let rl: readline.Interface | null = null;
+
     try {
       const stats = fs.statSync(state.logPath);
 
@@ -140,12 +149,15 @@ export class LogTailService {
       }
 
       // Create read stream from current position
-      const stream = fs.createReadStream(state.logPath, {
+      // Use 'r' flag explicitly and autoClose to ensure file handle is released on Windows
+      stream = fs.createReadStream(state.logPath, {
         start: state.filePosition,
         encoding: 'utf8',
+        flags: 'r',
+        autoClose: true,
       });
 
-      const rl = readline.createInterface({
+      rl = readline.createInterface({
         input: stream,
         crlfDelay: Infinity,
       });
@@ -165,6 +177,14 @@ export class LogTailService {
       // File might not exist yet or be temporarily inaccessible
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
         logger.error(`[LogTail] Error reading log file for ${state.serverId}:`, error);
+      }
+    } finally {
+      // Ensure we close the readline interface and stream to release file handles on Windows
+      if (rl) {
+        rl.close();
+      }
+      if (stream) {
+        stream.destroy();
       }
     }
   }

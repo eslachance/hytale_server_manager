@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardHeader, CardTitle, CardContent, Button, Badge, StatusIndicator, DataTable, ConfirmDialog, type Column } from '../../components/ui';
-import { Play, Square, RotateCw, Eye, Plus, Trash2, Network, List, LayoutGrid } from 'lucide-react';
+import { Play, Square, RotateCw, Eye, Plus, Trash2, Network, List, LayoutGrid, Skull } from 'lucide-react';
 import { useToast } from '../../stores/toastStore';
 import api from '../../services/api';
 import websocket from '../../services/websocket';
@@ -243,6 +243,20 @@ export const ServersPage = () => {
     }
   };
 
+  const handleKill = async (server: Server) => {
+    try {
+      await api.killServer(server.id);
+      toast.warning('Server killed', `${server.name} has been force killed`);
+
+      // Update local state immediately
+      setServers((prev) =>
+        prev.map((s) => (s.id === server.id ? { ...s, status: 'stopped' } : s))
+      );
+    } catch (error: any) {
+      toast.error('Failed to kill server', error.message);
+    }
+  };
+
   const formatUptime = (seconds: number) => {
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
@@ -349,7 +363,7 @@ export const ServersPage = () => {
     }
   };
 
-  const handleServerAction = async (serverId: string, action: 'start' | 'stop' | 'restart') => {
+  const handleServerAction = async (serverId: string, action: 'start' | 'stop' | 'restart' | 'kill' | 'delete') => {
     const server = servers.find(s => s.id === serverId);
     if (!server) return;
 
@@ -362,6 +376,12 @@ export const ServersPage = () => {
         break;
       case 'restart':
         await handleRestart(server);
+        break;
+      case 'kill':
+        await handleKill(server);
+        break;
+      case 'delete':
+        setServerToDelete(server);
         break;
     }
   };
@@ -514,7 +534,7 @@ export const ServersPage = () => {
                 Restart
               </Button>
             </>
-          ) : server.status === 'stopped' ? (
+          ) : server.status === 'stopped' || server.status === 'crashed' ? (
             <Button
               variant="ghost"
               size="sm"
@@ -522,6 +542,17 @@ export const ServersPage = () => {
               onClick={() => handleStart(server)}
             >
               Start
+            </Button>
+          ) : server.status === 'stopping' ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              icon={<Skull size={14} />}
+              onClick={() => handleKill(server)}
+              className="text-danger hover:bg-danger/10"
+              title="Force kill the server"
+            >
+              Kill
             </Button>
           ) : (
             <Button variant="ghost" size="sm" disabled>
@@ -541,8 +572,8 @@ export const ServersPage = () => {
             size="sm"
             icon={<Trash2 size={14} />}
             onClick={() => setServerToDelete(server)}
-            disabled={server.status !== 'stopped'}
-            title={server.status !== 'stopped' ? 'Stop the server before deleting' : 'Delete server'}
+            disabled={server.status !== 'stopped' && server.status !== 'crashed'}
+            title={server.status !== 'stopped' && server.status !== 'crashed' ? 'Stop the server before deleting' : 'Delete server'}
           >
             Delete
           </Button>
@@ -551,7 +582,7 @@ export const ServersPage = () => {
     },
   ];
 
-  // Columns for ungrouped servers (simpler version)
+  // Columns for ungrouped servers
   const ungroupedColumns: Column<{ id: string; name: string; status: string }>[] = [
     {
       key: 'name',
@@ -574,18 +605,75 @@ export const ServersPage = () => {
       key: 'actions',
       label: 'Actions',
       sortable: false,
-      render: (server) => (
-        <div className="flex gap-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            icon={<Eye size={14} />}
-            onClick={() => navigate(`/servers/${server.id}`)}
-          >
-            Details
-          </Button>
-        </div>
-      ),
+      render: (server) => {
+        const fullServer = servers.find(s => s.id === server.id);
+        return (
+          <div className="flex gap-2">
+            {server.status === 'running' ? (
+              <>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  icon={<Square size={14} />}
+                  onClick={() => fullServer && handleStop(fullServer)}
+                >
+                  Stop
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  icon={<RotateCw size={14} />}
+                  onClick={() => fullServer && handleRestart(fullServer)}
+                >
+                  Restart
+                </Button>
+              </>
+            ) : server.status === 'stopped' || server.status === 'crashed' ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                icon={<Play size={14} />}
+                onClick={() => fullServer && handleStart(fullServer)}
+              >
+                Start
+              </Button>
+            ) : server.status === 'stopping' ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                icon={<Skull size={14} />}
+                onClick={() => fullServer && handleKill(fullServer)}
+                className="text-danger hover:bg-danger/10"
+                title="Force kill the server"
+              >
+                Kill
+              </Button>
+            ) : (
+              <Button variant="ghost" size="sm" disabled>
+                {server.status}...
+              </Button>
+            )}
+            <Button
+              variant="ghost"
+              size="sm"
+              icon={<Eye size={14} />}
+              onClick={() => navigate(`/servers/${server.id}`)}
+            >
+              Details
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              icon={<Trash2 size={14} />}
+              onClick={() => fullServer && setServerToDelete(fullServer)}
+              disabled={server.status !== 'stopped' && server.status !== 'crashed'}
+              title={server.status !== 'stopped' && server.status !== 'crashed' ? 'Stop the server before deleting' : 'Delete server'}
+            >
+              Delete
+            </Button>
+          </div>
+        );
+      },
     },
   ];
 

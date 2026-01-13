@@ -370,6 +370,9 @@ export function createAuthRoutes(): Router {
           role: user.role,
         },
         expiresIn,
+        // Also return access token for WebSocket authentication
+        // (WebSockets can't access httpOnly cookies)
+        accessToken,
       });
     } catch (error) {
       logger.error('Login error:', error);
@@ -452,6 +455,8 @@ export function createAuthRoutes(): Router {
           role: user.role,
         },
         expiresIn,
+        // Also return access token for WebSocket authentication
+        accessToken: newAccessToken,
       });
     } catch (error) {
       logger.error('Token refresh error:', error);
