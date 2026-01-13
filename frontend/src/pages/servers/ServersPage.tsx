@@ -29,7 +29,7 @@ interface Server {
   port: number;
   version: string;
   maxPlayers: number;
-  status: 'stopped' | 'starting' | 'running' | 'stopping';
+  status: 'stopped' | 'starting' | 'running' | 'stopping' | 'crashed' | 'orphaned';
   currentPlayers?: number;
   tps?: number;
   cpuUsage?: number;
