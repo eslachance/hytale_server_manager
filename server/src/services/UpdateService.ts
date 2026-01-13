@@ -315,8 +315,10 @@ for %%F in ("${installPath}\\*") do (
 for /D %%D in ("${installPath}\\*") do (
     if /I not "%%~nxD"=="data" (
         if /I not "%%~nxD"=="backups" (
-            if /I not "%%~nxD"=="node_modules" (
-                rmdir /s /q "%%D" 2>nul
+            if /I not "%%~nxD"=="servers" (
+                if /I not "%%~nxD"=="node_modules" (
+                    rmdir /s /q "%%D" 2>nul
+                )
             )
         )
     )
@@ -382,11 +384,11 @@ if [ -f "${installPath}/prisma/data/hytalepanel.db" ]; then
     cp "${installPath}/prisma/data/hytalepanel.db" "${tempDir}/hytalepanel.db.backup"
 fi
 
-# Remove old files (except data, backups, config)
+# Remove old files (except data, backups, servers, config)
 echo "Removing old files..."
 cd "${installPath}"
 find . -maxdepth 1 -type f ! -name "config.json" ! -name ".env" -delete 2>/dev/null
-find . -maxdepth 1 -type d ! -name "." ! -name "data" ! -name "backups" ! -name "node_modules" -exec rm -rf {} + 2>/dev/null
+find . -maxdepth 1 -type d ! -name "." ! -name "data" ! -name "backups" ! -name "servers" ! -name "node_modules" -exec rm -rf {} + 2>/dev/null
 
 # Copy new files
 echo "Installing new version..."
