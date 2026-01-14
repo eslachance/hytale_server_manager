@@ -39,6 +39,7 @@ export class ConsoleEvents {
     consoleNamespace.use(async (socket: AuthenticatedSocket, next) => {
       try {
         const token = socket.handshake.auth.token || socket.handshake.headers.authorization?.replace('Bearer ', '');
+        logger.info(`[ConsoleEvents] Auth token received: ${token ? token.substring(0, 30) + '...' : 'null'}`);
 
         if (!token) {
           logger.warn(`WebSocket connection rejected: No token provided (${socket.id})`);

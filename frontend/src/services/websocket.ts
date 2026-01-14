@@ -12,7 +12,9 @@ class WebSocketService {
   }
 
   private getToken(): string | null {
-    return localStorage.getItem('accessToken');
+    const token = localStorage.getItem('accessToken');
+    console.log('[WS] Getting token from localStorage:', token ? `${token.substring(0, 20)}...` : 'null');
+    return token;
   }
 
   // ============================================
