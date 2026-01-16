@@ -33,10 +33,13 @@ const MAX_FAILED_ATTEMPTS = 5;
 const LOCKOUT_DURATION_MS = 15 * 60 * 1000; // 15 minutes
 
 // Cookie settings
-// secure: only send cookies over HTTPS (production uses HTTPS by default)
+// secure: true in production by default (requires HTTPS)
+// Set INSECURE_COOKIES=true to allow HTTP (not recommended, only for local network testing)
+const isProduction = process.env.NODE_ENV === 'production';
+const allowInsecureCookies = process.env.INSECURE_COOKIES === 'true';
 const COOKIE_OPTIONS = {
   httpOnly: true,
-  secure: process.env.NODE_ENV === 'production',
+  secure: isProduction && !allowInsecureCookies,
   sameSite: 'lax' as const,
   path: '/',
 };
